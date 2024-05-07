@@ -39,19 +39,14 @@ const logger = async (req, res, next) => {
 
 const verifyToken = async (req, res, next) => {
     const token = req.cookies?.token;
-    console.log('value of token in middlewere', token)
     if (!token) {
-        return res.status(401).send({ message: 'not authorized' })
+        return res.status(401).send({ message: 'unauthorized access' })
     }
     jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
-        //error
         if (err) {
-            console.log(err)
-            return res.status(401).send({ message: 'unauthorized' })
+            return res.status(401).send({ message: 'unauthorized access' })
         }
         req.user = decoded;
-        //if token is valid it would be decoded
-        console.log('value in the token', decoded)
         next()
     })
 }
@@ -108,6 +103,9 @@ async function run() {
             console.log(req.query.email);
             // console.log('tttttt token', req.cookies.token)
             console.log("user in the valid token", req.user)
+            if(req.query.email !== req.user.email){
+                return res.status(403).send({message: 'forbidden access'})
+            }
             let query = {};
             if (req.query?.email) {
                 query = { email: req.query.email }
