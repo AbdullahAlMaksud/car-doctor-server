@@ -25,6 +25,10 @@ in axios set withCredintial: true;
 
  */
 
+/**
+ * 1. to send cookies from the client make sure you added withCreadential: true for the apo call using axios
+ * 2. use cookie parser to read token
+ */
 
 
 /**

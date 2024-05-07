@@ -1,19 +1,19 @@
 const express = require('express');
 const cors = require('cors');
-const jwt = require('jsonwebtoken');
-const cookieParser = require('cookie-parser')
-const app = express();
+const jwt = require('jsonwebtoken');  //for generating cookies
+const cookieParser = require('cookie-parser') //for get/watch/view cookies
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
-const port = process.env.PORT || 5000;
 require('dotenv').config()
+const app = express();
+const port = process.env.PORT || 5000;
 
+//middleware
 app.use(cors({
-    origin: ['http://localhost:5173'],
+    origin: ['http://localhost:5173', 'http://localhost:5174'],
     credentials: true
 }));
-
 app.use(express.json());
-app.use(cookieParser());
+app.use(cookieParser())
 
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.vbb7gl4.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
@@ -31,6 +31,30 @@ const client = new MongoClient(uri, {
 });
 
 
+//middleware by us
+const logger = async (req, res, next) => {
+    console.log('called', req.host, req.originalUrl)
+    next()
+}
+
+const verifyToken = async (req, res, next) => {
+    const token = req.cookies?.token;
+    console.log('value of token in middlewere', token)
+    if (!token) {
+        return res.status(401).send({ message: 'not authorized' })
+    }
+    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+        //error
+        if (err) {
+            console.log(err)
+            return res.status(401).send({ message: 'unauthorized' })
+        }
+        req.user = decoded;
+        //if token is valid it would be decoded
+        console.log('value in the token', decoded)
+        next()
+    })
+}
 
 async function run() {
     try {
@@ -40,23 +64,22 @@ async function run() {
 
 
         //auth realated api
-        app.post('/jwt', async(req,res)=>{
+        app.post('/jwt', logger, async (req, res) => {
             const user = req.body;
             console.log(user);
-            const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {expiresIn: '1h'})
 
+            const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' })
 
             res
-            .cookie('token', token, {
-                httpOnly: true,
-                secure: false,
-                sameSite: 'none'
-            })
-            .send({success: true});
+                .cookie('token', token, {
+                    httpOnly: true,
+                    secure: false
+                })
+                .send({ success: true });
         })
 
         //Services Related API
-        app.get('/services', async (req, res) => {
+        app.get('/services', logger, async (req, res) => {
             const cursor = serviesCollection.find();
             const result = await cursor.toArray()
             res.send(result)
@@ -80,10 +103,11 @@ async function run() {
             res.send(result)
         })
 
-
-        app.get('/bookings', async (req, res) => {
+        //bookings
+        app.get('/bookings', logger, verifyToken, async (req, res) => {
             console.log(req.query.email);
-            console.log('tok tok token', req.cookies.token)
+            // console.log('tttttt token', req.cookies.token)
+            console.log("user in the valid token", req.user)
             let query = {};
             if (req.query?.email) {
                 query = { email: req.query.email }
@@ -92,20 +116,20 @@ async function run() {
             res.send(result);
         })
 
-        app.patch('/bookings/:id', async(req,res)=>{
+        app.patch('/bookings/:id', async (req, res) => {
             const id = req.params.id;
-            const filter = {_id: new ObjectId(id)}
+            const filter = { _id: new ObjectId(id) }
             const upadatedBooking = req.body;
             console.log(upadatedBooking);
             // const options = {upsert: true}
 
             const updateDoc = {
                 $set: {
-                  status: upadatedBooking.status
+                    status: upadatedBooking.status
                 },
-              };
-              const result = await bookingCollection.updateOne(filter, updateDoc)
-              res.send(result)
+            };
+            const result = await bookingCollection.updateOne(filter, updateDoc)
+            res.send(result)
         })
 
         app.delete('/bookings/:id', async (req, res) => {
